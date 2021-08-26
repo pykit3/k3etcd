@@ -1,0 +1,7 @@
+-r _building/requirements.txt
+
+
+k3ut>=0.1.15,<0.2
+k3utfjson>=0.1.1,<0.2
+k3utdocker>=0.1.0,<0.2
+k3http>=0.1.0,<0.2
