@@ -1,0 +1,7 @@
+_extends: gh-config
+
+repository:
+  description: A python client for Etcd https://github.com/coreos/etcd
+               This module will only work correctly with the etcd server version 2.3.x or later.
+  homepage: https://blog.openacid.com
+  topics: python, etcd
