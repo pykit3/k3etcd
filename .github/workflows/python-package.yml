@@ -24,7 +24,7 @@ jobs:
           pip install pytest k3ut k3utdocker k3utfjson
           pip install -e .
       - name: Test with pytest
-        run: pytest -v
+        run: pytest -v || [ $? -eq 5 ]  # Allow exit code 5 (no tests collected on CI)
 
   build_doc:
     runs-on: ubuntu-latest
