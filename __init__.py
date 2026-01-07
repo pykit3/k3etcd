@@ -1,13 +1,12 @@
 """
-#   Description
+Python client for etcd server version 2.3.x and later.
 
-A python client for Etcd https://github.com/coreos/etcd
-
-This module will only work correctly with the etcd server version 2.3.x or later.
-
+See: https://github.com/coreos/etcd
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import version
+
+__version__ = version("k3etcd")
 __name__ = "k3etcd"
 
 from .client import (
