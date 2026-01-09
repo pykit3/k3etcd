@@ -10,9 +10,6 @@ import k3ut
 
 dd = k3ut.dd
 
-# Skip all tests when running on CI (requires docker network with specific IPs)
-if k3ut.has_env("CI=true"):
-    raise unittest.SkipTest("Skipping tests on CI - requires docker network setup")
 
 HOSTS = (
     ("192.168.52.30", 3379),
