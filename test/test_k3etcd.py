@@ -34,7 +34,7 @@ ETCD_NODES = (
     "node_4",
 )
 
-etcd_test_tag = "quay.io/coreos/etcd:v2.3.7"
+etcd_test_tag = "quay.io/coreos/etcd:v3.5.0"
 
 
 class TestEtcdKeysResult(unittest.TestCase):

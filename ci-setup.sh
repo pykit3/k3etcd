@@ -8,4 +8,4 @@ set -e
 docker network create --subnet=192.168.52.0/24 etcd-test-net || true
 
 # Pull etcd image
-docker pull quay.io/coreos/etcd:v2.3.7
+docker pull quay.io/coreos/etcd:v3.5.0
