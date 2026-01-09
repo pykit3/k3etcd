@@ -833,8 +833,8 @@ def _generate_command(index, hosts, nodes, state="new"):
 
     cluster = cluster[:-1]
 
-    # etcd v3.x requires explicit binary path (v2.x used /etcd as entrypoint)
-    return "/usr/local/bin/etcd --name {name} \
+    # etcd v3.x requires explicit binary path and --enable-v2 for v2 API
+    return "/usr/local/bin/etcd --enable-v2 --name {name} \
            --initial-advertise-peer-urls http://{ip_peer_adv}:3380 \
            --listen-peer-urls http://{ip_peer}:3380 \
            --advertise-client-urls http://{ip_cli_adv}:3379 \
