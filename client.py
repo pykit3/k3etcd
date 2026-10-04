@@ -476,7 +476,8 @@ class Response(object):
 
     @classmethod
     def from_http(Cls, h, **argkv):
-        return Cls(h, status=h.status, headers=h.headers, body=h.read_body(None), **argkv)
+        body = h.read_body(None)
+        return Cls(h, status=h.status, headers=h.headers, body=body.decode("utf-8"), **argkv)
 
 
 class Client(object):

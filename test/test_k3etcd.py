@@ -223,6 +223,21 @@ class TestException(unittest.TestCase):
             self.assertRaisesRegex(e, expect_msg, k3etcd.EtcdError.handle, res)
 
 
+class TestResponse(unittest.TestCase):
+    def test_from_http_decodes_body(self):
+        # k3http.Client.read_body() returns bytes; Response.data stays str.
+        class FakeHttp:
+            def __init__(self):
+                self.status = 200
+                self.headers = {}
+
+            def read_body(self, size):
+                return "中".encode()
+
+        res = k3etcd.Response.from_http(FakeHttp())
+        self.assertEqual("中", res.data)
+
+
 class TestClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
