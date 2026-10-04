@@ -1,12 +1,11 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import time
 import unittest
-import k3etcd
+
+import k3ut
 import k3utdocker
 import k3utfjson
-import k3ut
+
+import k3etcd
 
 dd = k3ut.dd
 
@@ -255,7 +254,7 @@ class TestClient(unittest.TestCase):
                 for n in res._children:
                     c.delete(n["key"], dir="dir" in n and n["dir"], recursive=True)
                 break
-            except Exception as e:
+            except k3etcd.EtcdException as e:
                 dd(repr(e))
                 time.sleep(1)
                 break
@@ -263,7 +262,7 @@ class TestClient(unittest.TestCase):
     def test_machine_cache(self):
         machine = list(HOSTS)
         machine.pop(0)
-        machine = ["http://%s:%d" % (ip, port) for ip, port in machine]
+        machine = [f"http://{ip}:{port}" for ip, port in machine]
         cases = (
             (HOSTS, 3379, True, machine),
             ("192.168.52.30", 3379, True, machine),
@@ -291,7 +290,7 @@ class TestClient(unittest.TestCase):
             self.assertEqual(protocol, c.protocol)
             self.assertEqual(timeout, c.read_timeout)
             self.assertEqual(allow_redirect, c.allow_redirect)
-            self.assertEqual("%s://%s:%d" % (protocol, host, port), c.base_uri)
+            self.assertEqual(f"{protocol}://{host}:{port}", c.base_uri)
 
     def test_members(self):
         c = k3etcd.Client(host=HOSTS)
@@ -300,7 +299,7 @@ class TestClient(unittest.TestCase):
         for h, p in HOSTS:
             succ = False
             for m in mems:
-                if "http://%s:%d" % (h, p) == m["clientURLs"][0]:
+                if f"http://{h}:{p}" == m["clientURLs"][0]:
                     succ = True
                     break
             self.assertTrue(succ)
@@ -385,10 +384,8 @@ class TestClient(unittest.TestCase):
             ("key5", k3utfjson.dump(("我",), encoding=None), '["\\u6211"]'),
         )
         cli = k3etcd.Client(host=HOSTS)
-        count = 0
-        for key, val, expected in cases:
+        for count, (key, val, expected) in enumerate(cases):
             print(count)
-            count += 1
             cli.set(key, val)
             res = cli.get(key)
             self.assertEqual(expected, res.value)
@@ -462,7 +459,7 @@ class TestClient(unittest.TestCase):
 
         start_index = res.modifiedIndex
         for i in range(4):
-            res = c.set("abc", "val%d" % (i))
+            res = c.set("abc", f"val{i}")
             end_index = res.modifiedIndex
 
         result = []
@@ -656,12 +653,12 @@ class TestClient(unittest.TestCase):
         self.assertEqual(5, len(c.ids))
 
     def test_clienturls(self):
-        expected_res = ["http://%s:%d" % (ip, port) for ip, port in HOSTS]
+        expected_res = [f"http://{ip}:{port}" for ip, port in HOSTS]
         c = k3etcd.Client(host=HOSTS)
         self.assertEqual(set(expected_res), set(c.clienturls))
 
     def test_peerurls(self):
-        expected_res = ["http://%s:3380" % (ip) for ip, _ in HOSTS]
+        expected_res = [f"http://{ip}:3380" for ip, _ in HOSTS]
         c = k3etcd.Client(host=HOSTS)
         self.assertEqual(set(expected_res), set(c.peerurls))
 
@@ -723,7 +720,7 @@ class TestClient(unittest.TestCase):
         c = k3etcd.Client(host=hosts)
         try:
             for ip, name, node, count in cases:
-                c.add_member(*["http://%s:3380" % (ip)])
+                c.add_member(*[f"http://{ip}:3380"])
                 hosts.append((ip, 3379))
                 nodes.append(node)
                 names.append(name)
@@ -746,7 +743,7 @@ class TestClient(unittest.TestCase):
             for u in users["users"]:
                 try:
                     c.delete_user(u["user"], root_pwd)
-                except Exception:
+                except k3etcd.EtcdException:
                     continue
 
         roles = c.get_role(None, root_pwd)
@@ -754,7 +751,7 @@ class TestClient(unittest.TestCase):
             for r in roles["roles"]:
                 try:
                     c.delete_role(r["role"], root_pwd)
-                except Exception:
+                except k3etcd.EtcdException:
                     continue
 
     def test_create_root(self):
@@ -844,21 +841,19 @@ def _generate_command(index, hosts, nodes, state="new"):
     ip, _ = hosts[index]
     cluster = ""
     for i in range(len(hosts)):
-        cluster += "%s=http://%s:3380," % (nodes[i], hosts[i][0])
+        cluster += f"{nodes[i]}=http://{hosts[i][0]}:3380,"
 
     cluster = cluster[:-1]
 
     # etcd v3.x requires explicit binary path and --enable-v2 for v2 API
-    return "/usr/local/bin/etcd --enable-v2 --name {name} \
-           --initial-advertise-peer-urls http://{ip_peer_adv}:3380 \
-           --listen-peer-urls http://{ip_peer}:3380 \
-           --advertise-client-urls http://{ip_cli_adv}:3379 \
-           --listen-client-urls http://{ip_cli}:3379 \
+    return f"/usr/local/bin/etcd --enable-v2 --name {node} \
+           --initial-advertise-peer-urls http://{ip}:3380 \
+           --listen-peer-urls http://{ip}:3380 \
+           --advertise-client-urls http://{ip}:3379 \
+           --listen-client-urls http://{ip}:3379 \
            --initial-cluster {cluster} \
            --initial-cluster-state {state} \
-           --initial-cluster-token test_etcd_token".format(
-        name=node, ip_peer_adv=ip, ip_peer=ip, ip_cli_adv=ip, ip_cli=ip, cluster=cluster, state=state
-    )
+           --initial-cluster-token test_etcd_token"
 
 
 def _start_etcd_server(hosts, names, nodes, state="new"):

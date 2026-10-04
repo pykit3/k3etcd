@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
-
+import base64
 import http.client
 import logging
 import socket
@@ -8,7 +6,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import base64
+from typing import ClassVar
+
 import k3http
 import k3utfjson
 
@@ -21,16 +20,12 @@ class EtcdException(Exception):
     It is a subclass of `Exception`.
     """
 
-    pass
-
 
 class EtcdInternalError(EtcdException):
     """
     A subclass of `etcd.EtcdException`.
     Raise if etcd server "Raft Internal Error" or "During Leader Election".
     """
-
-    pass
 
 
 class NoMoreMachineError(EtcdException):
@@ -39,16 +34,12 @@ class NoMoreMachineError(EtcdException):
     Raise if there are no machines left to try.
     """
 
-    pass
-
 
 class EtcdReadTimeoutError(EtcdException):
     """
     A subclass of `etcd.EtcdException`.
     Raise if timeout when watching a key.
     """
-
-    pass
 
 
 class EtcdRequestError(EtcdException):
@@ -58,8 +49,6 @@ class EtcdRequestError(EtcdException):
     Such as invalid http request method or invalid headers.
     """
 
-    pass
-
 
 class EtcdResponseError(EtcdException):
     """
@@ -67,16 +56,12 @@ class EtcdResponseError(EtcdException):
     Raise if etcd server failed to process request.
     """
 
-    pass
-
 
 class EtcdIncompleteRead(EtcdResponseError):
     """
     A subclass of `etcd.EtcdException`.
     Raise if the encoding of response body is not json.
     """
-
-    pass
 
 
 class EtcdSSLError(EtcdException):
@@ -86,8 +71,6 @@ class EtcdSSLError(EtcdException):
     Right now, this module don't support `https`.
     """
 
-    pass
-
 
 class EtcdWatchError(EtcdException):
     """
@@ -96,8 +79,6 @@ class EtcdWatchError(EtcdException):
     or "The event in requested index is outdated and cleared".
     """
 
-    pass
-
 
 class EtcdKeyError(EtcdException, KeyError):
     """
@@ -105,8 +86,6 @@ class EtcdKeyError(EtcdException, KeyError):
     The base class of `etcd.EcodeKeyNotFound`, `etcd.EcodeNotFile`,
     `etcd.EcodeNotDir` and `etcd.EcodeNodeExist` in this module.
     """
-
-    pass
 
 
 class EtcdValueError(EtcdException, ValueError):
@@ -118,16 +97,12 @@ class EtcdValueError(EtcdException, ValueError):
     `etcd.EcodeInvalidForm` in this module.
     """
 
-    pass
-
 
 class EcodeKeyNotFound(EtcdKeyError):
     """
     A subclass of `etcd.EtcdKeyError`.
     Raise if key not found.
     """
-
-    pass
 
 
 class EcodeTestFailed(EtcdValueError):
@@ -137,8 +112,6 @@ class EcodeTestFailed(EtcdValueError):
     Such as `prevValue=abc` compare failed in the cluster.
     """
 
-    pass
-
 
 class EcodeNotFile(EtcdKeyError):
     """
@@ -147,16 +120,12 @@ class EcodeNotFile(EtcdKeyError):
 
     """
 
-    pass
-
 
 class EcodeNotDir(EtcdKeyError):
     """
     A subclass of `etcd.EtcdKeyError`.
     Raise if the dir operation to a file.
     """
-
-    pass
 
 
 class EcodeNodeExist(EtcdKeyError):
@@ -165,16 +134,12 @@ class EcodeNodeExist(EtcdKeyError):
     Raise if create a existed key with `prevExist=False`.
     """
 
-    pass
-
 
 class EcodeRootROnly(EtcdValueError):
     """
     A subclass of `etcd.EtcdValueError`.
     Raise if root is read only.
     """
-
-    pass
 
 
 class EcodeDirNotEmpty(EtcdValueError):
@@ -183,16 +148,12 @@ class EcodeDirNotEmpty(EtcdValueError):
     Raise if delete a not empty dir with `recursive=false`.
     """
 
-    pass
-
 
 class EcodePrevValueRequired(EtcdValueError):
     """
     A subclass of `etcd.EtcdValueError`.
     Raise if not provide `prevValue` when it is required in post form.
     """
-
-    pass
 
 
 class EcodeTTLNaN(EtcdValueError):
@@ -201,16 +162,12 @@ class EcodeTTLNaN(EtcdValueError):
     Raise if the given `TTL` in post form is not a number.
     """
 
-    pass
-
 
 class EcodeIndexNaN(EtcdValueError):
     """
     A subclass of `etcd.EtcdValueError`.
     Raise if the given `index` in post form is not a number.
     """
-
-    pass
 
 
 class EcodeInvalidField(EtcdValueError):
@@ -219,16 +176,12 @@ class EcodeInvalidField(EtcdValueError):
     Raise if the http header field is invalid.
     """
 
-    pass
-
 
 class EcodeInvalidForm(EtcdValueError):
     """
     A subclass of `etcd.EtcdValueError`.
     Raise if post form is invalid.
     """
-
-    pass
 
 
 class EcodeInscientPermissions(EtcdException):
@@ -237,18 +190,13 @@ class EcodeInscientPermissions(EtcdException):
     Raise if Unauthorized.
     """
 
-    pass
-
 
 def list_type(x):
-    if isinstance(x, (list, tuple)):
-        return True
-
-    return False
+    return isinstance(x, (list, tuple))
 
 
-class EtcdError(object):
-    error_exceptions = {
+class EtcdError:
+    error_exceptions: ClassVar[dict] = {
         100: EcodeKeyNotFound,
         101: EcodeTestFailed,
         102: EcodeNotFile,
@@ -305,7 +253,7 @@ class EtcdError(object):
         raise exc(e)
 
 
-class EtcdKeysResult(object):
+class EtcdKeysResult:
     """
     `etcd.EtcdKeysResult.expiration`
 
@@ -342,7 +290,7 @@ class EtcdKeysResult(object):
     It is an iterator. Each element is a `etcd.EtcdKeysResult` object.
     """
 
-    _node_props = {
+    _node_props: ClassVar[dict] = {
         "key": None,
         "value": None,
         "expiration": None,
@@ -403,8 +351,7 @@ class EtcdKeysResult(object):
 
         for n in self._children:
             node = EtcdKeysResult(None, n)
-            for child in node.get_subtree(leaves_only=leaves_only):
-                yield child
+            yield from node.get_subtree(leaves_only=leaves_only)
 
         return
 
@@ -427,7 +374,7 @@ class EtcdKeysResult(object):
                 b = getattr(other, k)
                 if a != b:
                     return False
-            except Exception:
+            except AttributeError:
                 return False
 
         return True
@@ -443,10 +390,10 @@ class EtcdKeysResult(object):
         """
         Convert the object to a string and return it.
         """
-        return "%s(%r)" % (self.__class__, self.__dict__)
+        return f"{self.__class__}({self.__dict__!r})"
 
 
-class Response(object):
+class Response:
     REDIRECT_STATUSES = (301, 302, 303, 307, 308)
 
     def __init__(self, conn=None, status=0, version=0, reason=None, headers=None, body=""):
@@ -480,15 +427,15 @@ class Response(object):
         return Cls(h, status=h.status, headers=h.headers, body=body.decode("utf-8"), **argkv)
 
 
-class Client(object):
+class Client:
     _MGET = "GET"
     _MPUT = "PUT"
     _MPOST = "POST"
     _MDELETE = "DELETE"
 
-    _write_conditions = {"prevValue", "prevIndex", "prevExist"}
-    _read_options = {"recursive", "wait", "waitIndex", "sorted", "quorum"}
-    _del_conditions = {"prevValue", "prevIndex"}
+    _write_conditions: ClassVar[set] = {"prevValue", "prevIndex", "prevExist"}
+    _read_options: ClassVar[set] = {"recursive", "wait", "waitIndex", "sorted", "quorum"}
+    _del_conditions: ClassVar[set] = {"prevValue", "prevIndex"}
     """
     ##  etcd.Client.base_uri
     
@@ -644,14 +591,14 @@ class Client(object):
         if not list_type(host):
             self._host = host
             self._port = int(port)
-            self._base_uri = "%s://%s:%d" % (self._protocol, self._host, self._port)
+            self._base_uri = f"{self._protocol}://{self._host}:{self._port}"
         else:
             for h in host:
                 if list_type(h):
                     _h, _p = (list(h) + [int(port)])[:2]
                 else:
                     _h, _p = h, int(port)
-                self._machines_cache.append("%s://%s:%d" % (self._protocol, _h, _p))
+                self._machines_cache.append(f"{self._protocol}://{_h}:{_p:d}")
 
             self._base_uri = self._machines_cache.pop(0)
             _, self._host, self._port = self._extract_base_uri()
@@ -772,11 +719,11 @@ class Client(object):
 
     @property
     def clienturls(self):
-        return sum([n["clientURLs"] for n in self.members], [])
+        return [url for n in self.members for url in n["clientURLs"]]
 
     @property
     def peerurls(self):
-        return sum([n["peerURLs"] for n in self.members], [])
+        return [url for n in self.members for url in n["peerURLs"]]
 
     def __contains__(self, key):
         try:
@@ -787,7 +734,7 @@ class Client(object):
 
     def _sanitize_key(self, key):
         if not key.startswith("/"):
-            key = "/{key}".format(key=key)
+            key = f"/{key}"
         return key
 
     def _extract_base_uri(self):
@@ -832,27 +779,27 @@ class Client(object):
             r.parse_response(response)
             return r
         except ValueError as e:
-            logger.error(repr(e) + " while decode {data}".format(data=response.data))
-            raise EtcdIncompleteRead("failed to decode %s" % response.data)
+            logger.error(repr(e) + f" while decode {response.data}")
+            raise EtcdIncompleteRead(f"failed to decode {response.data}")
         except Exception as e:
-            logger.error(repr(e) + " while decode {data}".format(data=response.data))
-            raise EtcdResponseError("failed to decode %s" % response.data)
+            logger.error(repr(e) + f" while decode {response.data}")
+            raise EtcdResponseError(f"failed to decode {response.data}") from e
 
     def _to_dict(self, response):
         try:
             return k3utfjson.load(response.data)
         except ValueError as e:
-            logger.error(repr(e) + " while decode {data}".format(data=response.data))
-            raise EtcdIncompleteRead("failed to decode %s" % response.data)
+            logger.error(repr(e) + f" while decode {response.data}")
+            raise EtcdIncompleteRead(f"failed to decode {response.data}")
         except Exception as e:
-            logger.error(repr(e) + " while decode {data}".format(data=response.data))
-            raise EtcdResponseError("failed to decode %s" % response.data)
+            logger.error(repr(e) + f" while decode {response.data}")
+            raise EtcdResponseError(f"failed to decode {response.data}") from e
 
     def _handle_server_response(self, response):
         if response.status in (http.client.OK, http.client.CREATED, http.client.NO_CONTENT):
             return response
 
-        logger.debug("invalid response status:{st} body:{body}".format(st=response.status, body=response.data))
+        logger.debug(f"invalid response status:{response.status} body:{response.data}")
 
         EtcdError.handle(response)
 
@@ -860,7 +807,7 @@ class Client(object):
         while True:
             host, port, path = self._parse_url(url)
             if host is None or port is None or path is None:
-                raise EtcdException("url is invalid, {url}".format(url=url))
+                raise EtcdException(f"url is invalid, {url}")
 
             qs = {}
             headers = {}
@@ -882,7 +829,7 @@ class Client(object):
                     body = urllib.parse.urlencode(params or {})
                     headers.update({"Content-Type": "application/x-www-form-urlencoded", "Content-Length": len(body)})
             else:
-                raise EtcdRequestError("HTTP method {method} not supported".format(method=method))
+                raise EtcdRequestError(f"HTTP method {method} not supported")
 
             if len(qs) > 0:
                 if "?" in path:
@@ -892,17 +839,11 @@ class Client(object):
 
             if self.basic_auth_account is not None:
                 auth = {
-                    "Authorization": "Basic {ant}".format(
-                        ant=base64.b64encode(self.basic_auth_account.encode()).strip().decode()
-                    ),
+                    "Authorization": f"Basic {base64.b64encode(self.basic_auth_account.encode()).strip().decode()}",
                 }
                 headers.update(auth)
 
-            logger.debug(
-                "connect -> {mtd} {url}{path} {timeout}".format(
-                    mtd=method, url=self._base_uri, path=path, timeout=timeout
-                )
-            )
+            logger.debug(f"connect -> {method} {self._base_uri}{path} {timeout}")
 
             h = k3http.Client(host, port, timeout)
             h.send_request(path, method, headers)
@@ -919,7 +860,7 @@ class Client(object):
 
             url = resp.get_redirect_location()
             if url is None:
-                raise EtcdResponseError("location not found in {header}".format(header=resp.headers))
+                raise EtcdResponseError(f"location not found in {resp.headers}")
 
             logger.debug("redirect -> " + url)
 
@@ -934,7 +875,7 @@ class Client(object):
             try:
                 response = self._request(url, method, params, timeout, bodyinjson)
                 break
-            except (socket.error, k3http.HttpError) as e:
+            except (OSError, k3http.HttpError) as e:
                 if raise_read_timeout and isinstance(e, socket.timeout):
                     raise EtcdReadTimeoutError(e)
 
@@ -943,15 +884,13 @@ class Client(object):
                     self._base_uri = self._machines_cache.pop(0)
                     self._protocol, self._host, self._port = self._extract_base_uri()
 
-                    logger.info(
-                        "{err} while connect {cur}, try connect {nxt}".format(err=repr(e), cur=url, nxt=self._base_uri)
-                    )
+                    logger.info(f"{e!r} while connect {url}, try connect {self._base_uri}")
 
                 else:
                     logger.info("no more host to retry")
 
             except Exception as e:
-                logger.exception(repr(e) + " while send request to etcd")
+                logger.exception("while send request to etcd")
                 raise EtcdException(e)
 
         else:
@@ -978,7 +917,7 @@ class Client(object):
         if not path.startswith("/"):
             raise ValueError("Path does not start with /")
 
-        for i in range(0, 2):
+        for i in range(2):
             try:
                 return self._api_execute_with_retry(
                     path,
@@ -991,7 +930,7 @@ class Client(object):
                 )
 
             except NoMoreMachineError as e:
-                logger.info(repr(e) + " while send_request path:{path}, method:{mtd}".format(path=path, mtd=method))
+                logger.info(repr(e) + f" while send_request path:{path}, method:{method}")
 
                 if i == 1 or not need_refresh_machines or not self._allow_reconnect:
                     raise
@@ -1243,10 +1182,9 @@ class Client(object):
         local_index = waitindex
         while True:
             res = self._watch(key, waitindex=local_index, timeout=0, **argkv)
-            if until is not None and res.modifiedIndex is not None:
-                if res.modifiedIndex >= until:
-                    yield res
-                    return
+            if until is not None and res.modifiedIndex is not None and res.modifiedIndex >= until:
+                yield res
+                return
 
             if local_index is not None:
                 local_index = (res.modifiedIndex or local_index) + 1
@@ -1339,7 +1277,7 @@ class Client(object):
         :return: nothing
         """
         if mid not in self.ids:
-            logger.info("{mid} not in the cluster when delete member".format(mid=mid))
+            logger.info(f"{mid} not in the cluster when delete member")
             return
 
         mid = self._sanitize_key(mid)
@@ -1354,7 +1292,7 @@ class Client(object):
         :return: nothing
         """
         if mid not in self.ids:
-            logger.info("{mid} not in the cluster when change peerurls".format(mid=mid))
+            logger.info(f"{mid} not in the cluster when change peerurls")
             return
 
         if len(peerurls) == 0:
@@ -1366,7 +1304,7 @@ class Client(object):
         self.api_execute(self._mem_path + mid, self._MPUT, params=data, bodyinjson=True)
 
     def _root_auth(self, password):
-        return "root:%s" % (password)
+        return f"root:{password}"
 
     def create_root(self, password):
         """

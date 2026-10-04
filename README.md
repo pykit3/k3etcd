@@ -9,12 +9,9 @@ A python client for Etcd https://github.com/coreos/etcd This module will only wo
 k3etcd is a component of [pykit3] project: a python3 toolkit set.
 
 
-#   Description
+Python client for etcd server version 2.3.x and later.
 
-A python client for Etcd https://github.com/coreos/etcd
-
-This module will only work correctly with the etcd server version 2.3.x or later.
-
+See: https://github.com/coreos/etcd
 
 
 
@@ -27,19 +24,18 @@ pip install k3etcd
 # Synopsis
 
 ```python
-
 import k3etcd
 
-hosts=(
-    ('192.168.0.100', 2379),
-    ('192.168.0.101', 2379),
-    ('192.168.0.102', 2379),
+hosts = (
+    ("192.168.0.100", 2379),
+    ("192.168.0.101", 2379),
+    ("192.168.0.102", 2379),
 )
 
 try:
     c = k3etcd.Client(host=hosts)
-    c.set('test_key', 'test_val')
-    res = c.get('test_key')
+    c.set("test_key", "test_val")
+    res = c.get("test_key")
     # type(res) is EtcdKeysResult
     # res.key == 'test_key'
     # res.value == 'test_val'
@@ -125,16 +121,15 @@ try:
     # get ids of etcd servers
     # ids=['fca771384ed46928', '991200c666cc4678', '4768ce54ee212c95']
 
-    peerurls = ['http://192.168.0.103:2380']
+    peerurls = ["http://192.168.0.103:2380"]
     c.add_member(*peerurls)
     # only register new node
     # after it, start the server
 
-    peerurls = ['http://192.168.0.102:4380']
-    c.change_peerurls('fca771384ed46928', *peerurls)
+    peerurls = ["http://192.168.0.102:4380"]
+    c.change_peerurls("fca771384ed46928", *peerurls)
 except k3etcd.EtcdException as e:
     print(repr(e))
-
 ```
 
 #   Author
