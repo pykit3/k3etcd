@@ -5,6 +5,7 @@ import ssl
 import threading
 import time
 import unittest
+import urllib.parse
 
 import k3ut
 import k3utdocker
@@ -398,6 +399,26 @@ class TestRequest(unittest.TestCase):
             c.get("foo")
 
         self.assertEqual([], fake.requests)
+
+    def test_key_is_percent_encoded(self):
+        fake = FakeEtcd(lambda path: (200, {}, b'{"action": "get", "node": {"key": "/x", "value": "v"}}'))
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        c.get("a?b")
+        c.set("a;b", "v")
+        c.delete("a#b")
+        c.get("a%20b")
+        c.get("d/a b")
+
+        # Like etcd, take the path without the query and percent-decode it.
+        keys = []
+        for r in fake.requests:
+            path = urllib.parse.urlsplit(r["path"]).path
+            keys.append(urllib.parse.unquote(path))
+
+        want = ["/v2/keys/a?b", "/v2/keys/a;b", "/v2/keys/a#b", "/v2/keys/a%20b", "/v2/keys/d/a b"]
+        self.assertEqual(want, keys)
 
 
 class TestClient(unittest.TestCase):

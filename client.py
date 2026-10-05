@@ -738,7 +738,7 @@ class Client:
     def _sanitize_key(self, key):
         if not key.startswith("/"):
             key = f"/{key}"
-        return key
+        return urllib.parse.quote(key)
 
     def _extract_base_uri(self):
         p = urllib.parse.urlparse(self._base_uri)
