@@ -432,6 +432,7 @@ class Client:
     _MPUT = "PUT"
     _MPOST = "POST"
     _MDELETE = "DELETE"
+    _MAX_REDIRECTS = 10
 
     _write_conditions: ClassVar[set] = {"prevValue", "prevIndex", "prevExist"}
     _read_options: ClassVar[set] = {"recursive", "wait", "waitIndex", "sorted", "quorum"}
@@ -804,7 +805,10 @@ class Client:
         EtcdError.handle(response)
 
     def _request(self, url, method, params, timeout, bodyinjson):
-        while True:
+        # The account is sent only to the server of `url`, not to a server that a redirect leads to.
+        origin_host, origin_port, _ = self._parse_url(url)
+
+        for _ in range(self._MAX_REDIRECTS + 1):
             host, port, path = self._parse_url(url)
             if host is None or port is None or path is None:
                 raise EtcdException(f"url is invalid, {url}")
@@ -838,7 +842,8 @@ class Client:
                 else:
                     path = path + "?" + urllib.parse.urlencode(qs)
 
-            if self.basic_auth_account is not None:
+            same_server = host == origin_host and port == origin_port
+            if self.basic_auth_account is not None and same_server:
                 auth = {
                     "Authorization": f"Basic {base64.b64encode(self.basic_auth_account.encode()).strip().decode()}",
                 }
@@ -864,6 +869,8 @@ class Client:
                 raise EtcdResponseError(f"location not found in {resp.headers}")
 
             logger.debug("redirect -> " + url)
+
+        raise EtcdResponseError(f"too many redirects, the last location is {url}")
 
     def _api_execute_with_retry(
         self, path, method, params=None, timeout=None, bodyinjson=False, raise_read_timeout=False, **request_kw

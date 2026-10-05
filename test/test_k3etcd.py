@@ -1,3 +1,4 @@
+import base64
 import http.server
 import json
 import threading
@@ -297,6 +298,53 @@ class TestRequest(unittest.TestCase):
 
         body = fake.requests[0]["body"]
         self.assertEqual({"user": "u1", "password": "中"}, json.loads(body))
+
+    def test_redirect_limit(self):
+        def reply(path):
+            return 307, {"Location": f"http://127.0.0.1:{fake.port}{path}"}, b""
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        with self.assertRaisesRegex(k3etcd.EtcdException, "too many redirects"):
+            c.get("foo")
+
+        self.assertEqual(k3etcd.Client._MAX_REDIRECTS + 1, len(fake.requests))
+
+    def test_redirect_to_other_server_drops_auth(self):
+        # The same IP with another port is another server.
+        target = FakeEtcd(lambda path: (200, {}, b'{"action": "get", "node": {"key": "/foo", "value": "bar"}}'))
+        self.addCleanup(target.close)
+
+        location = f"http://127.0.0.1:{target.port}/v2/keys/foo"
+        fake = FakeEtcd(lambda path: (307, {"Location": location}, b""))
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False, basic_auth_account="root:pw")
+        res = c.get("foo")
+        self.assertEqual("bar", res.value)
+
+        auth = "Basic " + base64.b64encode(b"root:pw").decode()
+        self.assertEqual(auth, fake.requests[0]["headers"].get("Authorization"))
+        self.assertIsNone(target.requests[0]["headers"].get("Authorization"))
+
+    def test_redirect_to_same_server_keeps_auth(self):
+        def reply(path):
+            if path == "/v2/keys/foo":
+                return 307, {"Location": f"http://127.0.0.1:{fake.port}/v2/keys/bar"}, b""
+            return 200, {}, b'{"action": "get", "node": {"key": "/bar", "value": "x"}}'
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False, basic_auth_account="root:pw")
+        res = c.get("foo")
+        self.assertEqual("x", res.value)
+
+        auth = "Basic " + base64.b64encode(b"root:pw").decode()
+        sent = [r["headers"].get("Authorization") for r in fake.requests]
+        self.assertEqual([auth, auth], sent)
 
 
 class TestClient(unittest.TestCase):
