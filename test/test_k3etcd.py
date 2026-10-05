@@ -1,3 +1,6 @@
+import http.server
+import json
+import threading
 import time
 import unittest
 
@@ -235,6 +238,65 @@ class TestResponse(unittest.TestCase):
 
         res = k3etcd.Response.from_http(FakeHttp())
         self.assertEqual("中", res.data)
+
+
+class _FakeEtcdHandler(http.server.BaseHTTPRequestHandler):
+    def _serve(self):
+        size = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(size)
+
+        fake = self.server.fake
+        fake.requests.append({"path": self.path, "headers": self.headers, "body": body})
+
+        status, headers, resp_body = fake.reply(self.path)
+        self.send_response(status)
+        for k, v in headers.items():
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.end_headers()
+        self.wfile.write(resp_body)
+
+    do_GET = _serve
+    do_PUT = _serve
+    do_POST = _serve
+    do_DELETE = _serve
+
+    def log_message(self, *args):
+        pass
+
+
+class FakeEtcd:
+    """
+    An HTTP server on 127.0.0.1 that records each request in `requests`.
+    It answers with `reply(path)`, which returns `(status, headers, body)`.
+    """
+
+    def __init__(self, reply):
+        self.reply = reply
+        self.requests = []
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FakeEtcdHandler)
+        self.server.fake = self
+        self.port = self.server.server_address[1]
+
+        th = threading.Thread(target=self.server.serve_forever, daemon=True)
+        th.start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class TestRequest(unittest.TestCase):
+    def test_json_body_length(self):
+        fake = FakeEtcd(lambda path: (201, {}, b'{"user": "u1"}'))
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        c.create_user("u1", "中", "root_password")
+
+        body = fake.requests[0]["body"]
+        self.assertEqual({"user": "u1", "password": "中"}, json.loads(body))
 
 
 class TestClient(unittest.TestCase):

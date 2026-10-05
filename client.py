@@ -823,7 +823,8 @@ class Client:
             elif method in (self._MPUT, self._MPOST):
                 if bodyinjson:
                     if params is not None:
-                        body = k3utfjson.dump(params)
+                        # Content-Length counts bytes, and non-ASCII text takes more bytes than characters.
+                        body = k3utfjson.dump(params).encode("utf-8")
                     headers.update({"Content-Type": "application/json", "Content-Length": len(body)})
                 else:
                     body = urllib.parse.urlencode(params or {})
