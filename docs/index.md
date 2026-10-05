@@ -4,7 +4,7 @@
 [![Documentation Status](https://readthedocs.org/projects/k3etcd/badge/?version=stable)](https://k3etcd.readthedocs.io/en/stable/?badge=stable)
 [![Package](https://img.shields.io/pypi/pyversions/k3etcd)](https://pypi.org/project/k3etcd)
 
-Python client for [etcd](https://github.com/coreos/etcd) server version 2.3.x and later.
+Python client for the [etcd](https://github.com/coreos/etcd) v2 API, for etcd server 2.3.x to 3.5.x.
 
 k3etcd is a component of [pykit3](https://github.com/pykit3) project: a python3 toolkit set.
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "k3etcd"
 version = "0.1.4"
-description = "Python client for etcd server version 2.3.x and later"
+description = "Python client for the etcd v2 API, for etcd server 2.3.x to 3.5.x"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"

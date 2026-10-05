@@ -1,5 +1,11 @@
 """
-Python client for etcd server version 2.3.x and later.
+Python client for the etcd v2 API. It works with etcd server 2.3.x to 3.5.x.
+
+etcd 3.4 and 3.5 serve the v2 API when started with `--enable-v2`.
+etcd 3.6 removed the v2 API.
+
+Use `protocol="https"` with `basic_auth_account`, so that the account is
+encrypted on the network.
 
 See: https://github.com/coreos/etcd
 """
