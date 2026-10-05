@@ -41,6 +41,7 @@ dev = [
     "k3ut",
     "k3utdocker",
     "k3utfjson",
+    "trustme",
 ]
 publish = [
     "build",

@@ -1,6 +1,7 @@
 import base64
 import http.server
 import json
+import ssl
 import threading
 import time
 import unittest
@@ -8,6 +9,7 @@ import unittest
 import k3ut
 import k3utdocker
 import k3utfjson
+import trustme
 
 import k3etcd
 
@@ -270,13 +272,16 @@ class FakeEtcd:
     """
     An HTTP server on 127.0.0.1 that records each request in `requests`.
     It answers with `reply(path)`, which returns `(status, headers, body)`.
+    With `ssl_context`, it serves HTTPS.
     """
 
-    def __init__(self, reply):
+    def __init__(self, reply, ssl_context=None):
         self.reply = reply
         self.requests = []
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FakeEtcdHandler)
+        if ssl_context is not None:
+            self.server.socket = ssl_context.wrap_socket(self.server.socket, server_side=True)
         self.server.fake = self
         self.port = self.server.server_address[1]
 
@@ -345,6 +350,40 @@ class TestRequest(unittest.TestCase):
         auth = "Basic " + base64.b64encode(b"root:pw").decode()
         sent = [r["headers"].get("Authorization") for r in fake.requests]
         self.assertEqual([auth, auth], sent)
+
+    def test_https(self):
+        ca = trustme.CA()
+        server_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ca.issue_cert("127.0.0.1").configure_cert(server_ctx)
+
+        body = b'{"action": "get", "node": {"key": "/foo", "value": "bar"}}'
+        fake = FakeEtcd(lambda path: (200, {}, body), server_ctx)
+        self.addCleanup(fake.close)
+
+        client_ctx = ssl.create_default_context()
+        ca.configure_trust(client_ctx)
+
+        c = k3etcd.Client(
+            host="127.0.0.1", port=fake.port, protocol="https", https_context=client_ctx, allow_reconnect=False
+        )
+        res = c.get("foo")
+        self.assertEqual("bar", res.value)
+        self.assertEqual(f"https://127.0.0.1:{fake.port}", c.base_uri)
+
+    def test_https_untrusted_certificate(self):
+        ca = trustme.CA()
+        server_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ca.issue_cert("127.0.0.1").configure_cert(server_ctx)
+
+        fake = FakeEtcd(lambda path: (200, {}, b"{}"), server_ctx)
+        self.addCleanup(fake.close)
+
+        # The default context does not trust the test CA.
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, protocol="https", allow_reconnect=False)
+        with self.assertRaises(k3etcd.EtcdSSLError):
+            c.get("foo")
+
+        self.assertEqual([], fake.requests)
 
 
 class TestClient(unittest.TestCase):
@@ -451,11 +490,6 @@ class TestClient(unittest.TestCase):
         res = k3etcd.Response(body="abc")
         c = k3etcd.Client(host=HOSTS)
         self.assertRaises(k3etcd.EtcdIncompleteRead, c._to_dict, res)
-
-    def test_etcdsslerror_exception(self):
-        c = k3etcd.Client(host=HOSTS)
-        self.assertRaises(k3etcd.EtcdSSLError, k3etcd.Client, host=HOSTS, protocol="https")
-        self.assertRaises(k3etcd.EtcdSSLError, c._parse_url, "https://")
 
     def test_next_server(self):
         k3utdocker.stop_container("etcd_t0")

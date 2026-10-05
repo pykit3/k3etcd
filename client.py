@@ -2,6 +2,7 @@ import base64
 import http.client
 import logging
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -67,8 +68,7 @@ class EtcdIncompleteRead(EtcdResponseError):
 class EtcdSSLError(EtcdException):
     """
     A subclass of `etcd.EtcdException`.
-    Raise if the protocol is `https`.
-    Right now, this module don't support `https`.
+    Raise if the certificate of an `https` etcd server fails verification.
     """
 
 
@@ -568,6 +568,7 @@ class Client:
         protocol="http",
         allow_reconnect=True,
         basic_auth_account=None,
+        https_context=None,
     ):
         """
         Etcd client class.
@@ -579,14 +580,15 @@ class Client:
         :param version_prefix: Type is `str`, url or version prefix in etcd url. Defaults to `v2`.
         :param read_timeout: Type is `int`, max seconds to wait for a request. Defaults to `10`.
         :param allow_redirect: Type is `bool`, allow the client to connect other nodes. Defaults to `True`.
-        :param protocol: Type is `str`, right now only support http. Defaults to `http`.
+        :param protocol: Type is `str`, `http` or `https`. Defaults to `http`.
         :param allow_reconnect: Type is `bool`, allow the client to reconnect to another etcd server
         in the cluster in the case the default one does not respond. Defaults to `True`.
         :param basic_auth_account: Type is `str`, the authorization information. Defaults to `None`.
+        :param https_context: Type is `ssl.SSLContext`, used to connect to `https` servers.
+        Defaults to `None`, which uses `ssl.create_default_context()`.
         """
         self._protocol = protocol
-        if protocol == "https":
-            raise EtcdSSLError("not supported https right now")
+        self._https_context = https_context
 
         self._machines_cache = []
         if not list_type(host):
@@ -700,7 +702,7 @@ class Client:
             port = p.port or self.port
             leaderhosts.append((p.hostname, port))
 
-        return Client(host=leaderhosts)._st("/leader")
+        return Client(host=leaderhosts, protocol=self._protocol, https_context=self._https_context)._st("/leader")
 
     @property
     def st_self(self):
@@ -745,14 +747,17 @@ class Client:
     def _parse_url(self, url):
         p = urllib.parse.urlparse(url)
 
-        if p.scheme == "https":
-            raise EtcdSSLError("not supported https right now. " + url)
-        elif p.scheme != "http":
-            return None, None, url
+        if p.scheme not in ("http", "https"):
+            return None, None, None, url
 
         port = p.port or self.port
 
-        return p.hostname, port, p.path
+        return p.scheme, p.hostname, port, p.path
+
+    def _get_https_context(self):
+        if self._https_context is None:
+            self._https_context = ssl.create_default_context()
+        return self._https_context
 
     def _generate_params(self, options, argkv):
         params = {}
@@ -806,10 +811,10 @@ class Client:
 
     def _request(self, url, method, params, timeout, bodyinjson):
         # The account is sent only to the server of `url`, not to a server that a redirect leads to.
-        origin_host, origin_port, _ = self._parse_url(url)
+        origin_scheme, origin_host, origin_port, _ = self._parse_url(url)
 
         for _ in range(self._MAX_REDIRECTS + 1):
-            host, port, path = self._parse_url(url)
+            scheme, host, port, path = self._parse_url(url)
             if host is None or port is None or path is None:
                 raise EtcdException(f"url is invalid, {url}")
 
@@ -842,7 +847,7 @@ class Client:
                 else:
                     path = path + "?" + urllib.parse.urlencode(qs)
 
-            same_server = host == origin_host and port == origin_port
+            same_server = scheme == origin_scheme and host == origin_host and port == origin_port
             if self.basic_auth_account is not None and same_server:
                 auth = {
                     "Authorization": f"Basic {base64.b64encode(self.basic_auth_account.encode()).strip().decode()}",
@@ -851,7 +856,11 @@ class Client:
 
             logger.debug(f"connect -> {method} {self._base_uri}{path} {timeout}")
 
-            h = k3http.Client(host, port, timeout)
+            https_context = None
+            if scheme == "https":
+                https_context = self._get_https_context()
+
+            h = k3http.Client(host, port, timeout, https_context=https_context)
             h.send_request(path, method, headers)
             h.send_body(body)
             h.read_response()
@@ -883,6 +892,9 @@ class Client:
             try:
                 response = self._request(url, method, params, timeout, bodyinjson)
                 break
+            # A certificate that fails verification is a setup error: trying the other servers does not help.
+            except ssl.SSLCertVerificationError as e:
+                raise EtcdSSLError(f"failed to verify the certificate of {url}: {e!r}") from e
             except (OSError, k3http.HttpError) as e:
                 if raise_read_timeout and isinstance(e, socket.timeout):
                     raise EtcdReadTimeoutError(e)
