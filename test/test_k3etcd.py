@@ -351,6 +351,20 @@ class TestRequest(unittest.TestCase):
         sent = [r["headers"].get("Authorization") for r in fake.requests]
         self.assertEqual([auth, auth], sent)
 
+    def test_redirect_keeps_query(self):
+        target = FakeEtcd(lambda path: (200, {}, b'{"action": "get", "node": {"key": "/foo", "value": "bar"}}'))
+        self.addCleanup(target.close)
+
+        # Like a proxy, `fake` redirects each request to `target` with the same path and query.
+        fake = FakeEtcd(lambda path: (307, {"Location": f"http://127.0.0.1:{target.port}{path}"}, b""))
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        c.get("foo", recursive=True)
+
+        paths = [r["path"] for r in target.requests]
+        self.assertEqual(["/v2/keys/foo?recursive=true"], paths)
+
     def test_https(self):
         ca = trustme.CA()
         server_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)

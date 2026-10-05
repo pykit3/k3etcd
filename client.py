@@ -752,7 +752,12 @@ class Client:
 
         port = p.port or self.port
 
-        return p.scheme, p.hostname, port, p.path
+        # `_request()` sends GET and DELETE params only once and relies on a redirect location to carry them.
+        path = p.path
+        if p.query:
+            path = f"{path}?{p.query}"
+
+        return p.scheme, p.hostname, port, path
 
     def _get_https_context(self):
         if self._https_context is None:
