@@ -1182,16 +1182,16 @@ class Client:
                 pass
 
         timeout = timeout or self.read_timeout
+        deadline = time.monotonic() + timeout
 
         while True:
-            st = time.time()
             try:
                 response = self.api_execute(
                     self._keys_path + key, self._MGET, params=params, timeout=timeout, raise_read_timeout=True
                 )
                 return self._to_keysresult(response)
             except (EtcdIncompleteRead, EtcdReadTimeoutError):
-                timeout = timeout - (time.time() - st)
+                timeout = deadline - time.monotonic()
                 if timeout <= 0:
                     raise EtcdReadTimeoutError("Watch Timeout: " + key)
 

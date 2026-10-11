@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 import urllib.parse
+from unittest import mock
 
 import k3ut
 import k3utdocker
@@ -525,6 +526,31 @@ class TestWatch(unittest.TestCase):
 
         self.assertEqual(3, res.modifiedIndex)
         self.assertEqual(["3", "3"], _wait_indexes(fake))
+
+    def test_watch_timeout_budget(self):
+        # Each failed attempt spends part of one budget, and the next attempt waits only for what is left.
+        c = k3etcd.Client(host="127.0.0.1", port=1, allow_reconnect=False)
+
+        newest = k3etcd.EtcdKeysResult("get", {"key": "/foo", "modifiedIndex": 5})
+        newest.etcd_index = 10
+
+        now = [100.0]
+        timeouts = []
+
+        def api_execute(path, method, params=None, timeout=None, **kwargs):
+            timeouts.append(timeout)
+            now[0] += 0.25
+            raise k3etcd.EtcdIncompleteRead("cut short")
+
+        with (
+            mock.patch.object(c, "get", return_value=newest),
+            mock.patch.object(c, "api_execute", api_execute),
+            mock.patch.object(time, "monotonic", lambda: now[0]),
+            self.assertRaises(k3etcd.EtcdReadTimeoutError),
+        ):
+            c.watch("foo", timeout=1.0)
+
+        self.assertEqual([1.0, 0.75, 0.5, 0.25], timeouts)
 
 
 class TestClient(unittest.TestCase):
