@@ -1,5 +1,6 @@
 import base64
 import http.server
+import itertools
 import json
 import ssl
 import threading
@@ -427,7 +428,7 @@ def _wait_indexes(fake):
     for r in fake.requests:
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(r["path"]).query)
         if "wait" in query:
-            indexes.append(query["waitIndex"][0])
+            indexes.append(query.get("waitIndex", [None])[0])
     return indexes
 
 
@@ -448,6 +449,24 @@ class TestWatch(unittest.TestCase):
         c.watch("foo")
 
         self.assertEqual(["100", "11", "11"], _wait_indexes(fake))
+
+    def test_eternal_watch_without_index(self):
+        # Each watch returns the event at its waitIndex, or at index 3 without one.
+        def reply(path):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
+            index = int(query.get("waitIndex", ["3"])[0])
+            body = json.dumps({"action": "set", "node": {"key": "/foo", "modifiedIndex": index}})
+            return 200, {"X-Etcd-Index": str(index)}, body.encode()
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        events = itertools.islice(c.eternal_watch("foo"), 3)
+        got = [r.modifiedIndex for r in events]
+
+        self.assertEqual([3, 4, 5], got)
+        self.assertEqual([None, "4", "5"], _wait_indexes(fake))
 
 
 class TestClient(unittest.TestCase):

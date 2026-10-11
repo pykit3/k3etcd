@@ -1212,8 +1212,10 @@ class Client:
                 yield res
                 return
 
-            if local_index is not None:
-                local_index = (res.modifiedIndex or local_index) + 1
+            # Without an index, the next watch would miss the events between two requests.
+            next_index = res.modifiedIndex or local_index
+            if next_index is not None:
+                local_index = next_index + 1
 
             yield res
 
