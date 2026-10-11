@@ -1160,7 +1160,8 @@ class Client:
         if waitindex is not None and 0 < waitindex <= newest_v.modifiedIndex:
             return newest_v
         else:
-            waitindex = newest_v.etcd_index + 1
+            # No event of the key lies between its modifiedIndex and etcd_index, but a future index is kept.
+            waitindex = max(waitindex or 0, newest_v.etcd_index + 1)
             return self._watch(key, waitindex, timeout, **argkv)
 
     def _watch(self, key, waitindex=None, timeout=None, **argkv):

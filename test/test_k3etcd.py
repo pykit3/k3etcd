@@ -421,6 +421,35 @@ class TestRequest(unittest.TestCase):
         self.assertEqual(want, keys)
 
 
+def _wait_indexes(fake):
+    # The waitIndex of each watch request that `fake` received.
+    indexes = []
+    for r in fake.requests:
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(r["path"]).query)
+        if "wait" in query:
+            indexes.append(query["waitIndex"][0])
+    return indexes
+
+
+class TestWatch(unittest.TestCase):
+    def test_watch_future_index(self):
+        # The key was last modified at 5 and the cluster index is 10.
+        def reply(path):
+            if "wait=true" in path:
+                return 200, {"X-Etcd-Index": "100"}, b'{"action": "set", "node": {"key": "/foo", "modifiedIndex": 100}}'
+            return 200, {"X-Etcd-Index": "10"}, b'{"action": "get", "node": {"key": "/foo", "modifiedIndex": 5}}'
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        c.watch("foo", waitindex=100)
+        c.watch("foo", waitindex=7)
+        c.watch("foo")
+
+        self.assertEqual(["100", "11", "11"], _wait_indexes(fake))
+
+
 class TestClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
