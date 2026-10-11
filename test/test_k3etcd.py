@@ -468,6 +468,64 @@ class TestWatch(unittest.TestCase):
         self.assertEqual([3, 4, 5], got)
         self.assertEqual([None, "4", "5"], _wait_indexes(fake))
 
+    def test_eternal_watch_delete_event(self):
+        # A delete event has no value, and the next watch starts after it.
+        events = {
+            None: {"action": "set", "node": {"key": "/foo", "value": "a", "modifiedIndex": 3}},
+            "4": {
+                "action": "delete",
+                "node": {"key": "/foo", "modifiedIndex": 4},
+                "prevNode": {"key": "/foo", "value": "a", "modifiedIndex": 3},
+            },
+            "5": {"action": "set", "node": {"key": "/foo", "value": "b", "modifiedIndex": 5}},
+        }
+
+        def reply(path):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
+            index = query.get("waitIndex", [None])[0]
+            return 200, {}, json.dumps(events[index]).encode()
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        events_got = itertools.islice(c.eternal_watch("foo"), 3)
+        got = [(r.action, r.modifiedIndex, r.value) for r in events_got]
+
+        self.assertEqual([("set", 3, "a"), ("delete", 4, None), ("set", 5, "b")], got)
+        self.assertEqual([None, "4", "5"], _wait_indexes(fake))
+
+    def test_watch_retries_a_broken_response(self):
+        # The first reply to the watch is cut short, so the client asks again from the same index.
+        replies = [b'{"action": "set", "node"', b'{"action": "set", "node": {"key": "/foo", "modifiedIndex": 11}}']
+
+        def reply(path):
+            if "wait=true" in path:
+                return 200, {"X-Etcd-Index": "11"}, replies.pop(0)
+            return 200, {"X-Etcd-Index": "10"}, b'{"action": "get", "node": {"key": "/foo", "modifiedIndex": 5}}'
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        res = c.watch("foo", timeout=5)
+
+        self.assertEqual(11, res.modifiedIndex)
+        self.assertEqual(["11", "11"], _wait_indexes(fake))
+
+    def test_eternal_watch_retries_a_broken_response(self):
+        # A watch without a timeout also asks again after a reply that is cut short.
+        replies = [b'{"action": "set", "node"', b'{"action": "set", "node": {"key": "/foo", "modifiedIndex": 3}}']
+
+        fake = FakeEtcd(lambda path: (200, {}, replies.pop(0)))
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        res = next(c.eternal_watch("foo", waitindex=3))
+
+        self.assertEqual(3, res.modifiedIndex)
+        self.assertEqual(["3", "3"], _wait_indexes(fake))
+
 
 class TestClient(unittest.TestCase):
     @classmethod
