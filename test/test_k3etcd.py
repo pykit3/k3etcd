@@ -9,6 +9,7 @@ import unittest
 import urllib.parse
 from unittest import mock
 
+import k3http
 import k3ut
 import k3utdocker
 import k3utfjson
@@ -367,6 +368,34 @@ class TestRequest(unittest.TestCase):
 
         paths = [r["path"] for r in target.requests]
         self.assertEqual(["/v2/keys/foo?recursive=true"], paths)
+
+    def test_request_closes_each_connection(self):
+        def reply(path):
+            if path == "/v2/keys/foo":
+                return 307, {"Location": f"http://127.0.0.1:{fake.port}/v2/keys/bar"}, b""
+            return 200, {}, b'{"action": "get", "node": {"key": "/bar", "value": "x"}}'
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        # `clients` keeps every connection alive, so garbage collection cannot close one.
+        clients = []
+        real_client = k3http.Client
+
+        def new_client(*args, **kwargs):
+            h = real_client(*args, **kwargs)
+            clients.append(h)
+            return h
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        with mock.patch("k3http.Client", side_effect=new_client):
+            res = c.get("foo")
+
+        self.assertEqual("x", res.value)
+
+        # The redirect and the reply came on two connections, and k3http.Client.close() sets sock to None.
+        socks = [h.sock for h in clients]
+        self.assertEqual([None, None], socks)
 
     def test_https(self):
         ca = trustme.CA()

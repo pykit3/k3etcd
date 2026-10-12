@@ -865,12 +865,12 @@ class Client:
             if scheme == "https":
                 https_context = self._get_https_context()
 
-            h = k3http.Client(host, port, timeout, https_context=https_context)
-            h.send_request(path, method, headers)
-            h.send_body(body)
-            h.read_response()
+            with k3http.Client(host, port, timeout, https_context=https_context) as h:
+                h.send_request(path, method, headers)
+                h.send_body(body)
+                h.read_response()
 
-            resp = Response.from_http(h)
+                resp = Response.from_http(h)
 
             if not self.allow_redirect:
                 return resp
