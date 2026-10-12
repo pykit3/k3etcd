@@ -451,6 +451,26 @@ class TestWatch(unittest.TestCase):
 
         self.assertEqual(["100", "11", "11"], _wait_indexes(fake))
 
+    def test_watch_missing_key(self):
+        # The key does not exist and the cluster index is 10.
+        def reply(path):
+            if "wait=true" in path:
+                return 200, {"X-Etcd-Index": "11"}, b'{"action": "set", "node": {"key": "/foo", "modifiedIndex": 11}}'
+            return 404, {"X-Etcd-Index": "10"}, b'{"errorCode": 100, "message": "Key not found", "index": 10}'
+
+        fake = FakeEtcd(reply)
+        self.addCleanup(fake.close)
+
+        c = k3etcd.Client(host="127.0.0.1", port=fake.port, allow_reconnect=False)
+        res = c.watch("foo", timeout=2)
+
+        # A past index is kept, so that the watch returns the event that deleted the key.
+        c.watch("foo", waitindex=7)
+        c.watch("foo", waitindex=100)
+
+        self.assertEqual(11, res.modifiedIndex)
+        self.assertEqual(["11", "7", "100"], _wait_indexes(fake))
+
     def test_eternal_watch_without_index(self):
         # Each watch returns the event at its waitIndex, or at index 3 without one.
         def reply(path):

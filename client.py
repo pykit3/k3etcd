@@ -1152,10 +1152,17 @@ class Client:
         If `waitindex` is `None`, use it.
         :return: A `etcd.EtcdKeysResult` object.
         """
-        newest_v = self.get(key)
-
         if waitindex is None:
             waitindex = argkv.get("waitIndex")
+
+        try:
+            newest_v = self.get(key)
+        except EcodeKeyNotFound as e:
+            # A given index is kept, because the event that deleted the key may lie at or after it.
+            if not waitindex:
+                headers = e.args[0]["headers"]
+                waitindex = int(headers["x-etcd-index"]) + 1
+            return self._watch(key, waitindex, timeout, **argkv)
 
         if waitindex is not None and 0 < waitindex <= newest_v.modifiedIndex:
             return newest_v
